@@ -1,7 +1,7 @@
-KAMAKURA SHADERS v1.0.1
+KAMAKURA SHADERS v1.0.8
 =======================
 
-Updated 2018/1/11
+Updated 2018/7/12
 
 Kamakura Shaders is a collection of shaders and components focusing on Non-Photorealistic
 Rendering for Unity with a bunch of features and adjustable parameters in a user-friendly
@@ -10,7 +10,7 @@ interface.
 
 NOTES
 -----
-- Target Environment: Unity 5.6.x or newer (Unity 2017.2.0p4 at this moment)
+- Target Environment: Unity 5.6.x ~ Unity 2017.4, Unity 2018.2.0b3
 - Graphics API DirectX9: Screen Space Hatch feature is not functioning on this graphics API
 - These shaders has not been tested yet on console platforms
   (PS4 / WiiU / Switch / Xbox One)
@@ -18,6 +18,44 @@ NOTES
 
 CHANGELOG
 ---------
+
+### v1.0.8
+- Now Rim can use color from GI
+- A new patch tool to fix materials with invalid / obsolete parameters that can be accessed in
+  "Kayac/Kamakura Shaders/Check For Patch" menu
+- LocalLight and CubeColorLocalSpaceRoot component now use MaterialPropertyBlock so it does
+  not make changes to Material assets. Due to this change, some materials may need to be
+  updated using the new patch tool
+- Improved Copy-Paste function: select all properties of a feature by pressing alt-key when
+  selecting
+- Fixed a problem where CubeColor outputs inaccurate color for Ambient and Rim on certain
+  devices
+- Fixed disappearing Outline bug in a certain case
+- Removed Outline Write Depth parameter so Outline will always write depth buffer
+- Added Auto Adjust Render Queue flag property to avoid confusion caused by the implicit
+  auto adjustment of render queue when Blend Mode is changed
+
+### v1.0.7
+- Updated Dreamy Character model
+
+### v1.0.6
+- Reenabled point and spot light attenuation as Unity patched the bug in Unity 2018.2.0b3
+- Fixes non-uniform outline width bug
+
+### v1.0.5
+- Point light and spot light attenuation is temporarily disabled due to a bug in
+  Unity 2018.1.0f2
+
+### v1.0.4
+- Fixed normal seams problem
+- Improved Outline: scale-independent outline. Back-face outline is now
+  calculated in clip-space, so it might be necessary to adjust outline
+  thickness parameter on existing materials
+- Added Rotate parameter in Kamakura Hair shader for rotating hair specular
+
+### v1.0.3
+- Added Blend Mode (Normal, Multiply) for Hatch and Shadow
+- Added Normal Intensity property
 
 ### v1.0.1
 - Fixed weird outline bug when using Metal Graphics API

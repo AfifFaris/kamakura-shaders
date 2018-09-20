@@ -20,8 +20,6 @@
 
 KAMAKURA_EXT_SharedExtraParams
 
-	uniform float_t _OutlineSize = 1.0;
-	uniform float_t _DepthBias = 0.00012;
 
 	uniform sampler2D _MainTex;
 	uniform float4_t _MainTex_ST;
@@ -60,7 +58,7 @@ KAMAKURA_EXT_SharedExtraParams
 
 	inline float3_t GetViewDir(float4 vertexPos)
 	{
-	#if defined(SHADER_API_METAL) || defined(SHADER_API_D3D11) || defined(SHADER_API_D3D11_9X)
+	#if defined(SHADER_API_METAL) || defined(SHADER_API_D3D11) || defined(SHADER_API_D3D11_9X) || defined(SHADER_API_D3D9)
  		float4_t nearPlane = float4_t(unity_CameraWorldClipPlanes[4].xyz, 0);
 	#else
 		float4_t nearPlane = float4_t(-unity_CameraWorldClipPlanes[4].xyz, 0);
@@ -147,6 +145,7 @@ KAMAKURA_EXT_SharedExtraParams
 	uniform fixed _ShadowModRimUseDiffuseTexture;
 	uniform fixed _ShadowModIntensity;
 	uniform fixed _ShadowModUseFilter;
+	uniform fixed _ShadowModBlendMode;
 
 	inline fixed3 ShadowMod(float2_t uv, fixed3 texSample, fixed3 lightRampTexSample, fixed3 lightColor, fixed3 localLightRampTexSample, fixed3 localLightColor, fixed3 ambient)
 	{
@@ -161,7 +160,7 @@ KAMAKURA_EXT_SharedExtraParams
 	#ifdef KAMAKURA_LOCALLIGHT_ON
 		diffuse += (_ShadowModIntensity * localLightRampTexSample - (_ShadowModIntensity - 1)) * localLightColor;
 	#endif
-		return lerp(shadowModTexSample, texSample, diffuse);
+		return lerp((1 - _ShadowModBlendMode) * shadowModTexSample + _ShadowModBlendMode * shadowModTexSample * texSample, texSample, diffuse);
 	}
 #endif // KAMAKURA_SHADOWMOD_ON
 
@@ -179,6 +178,7 @@ KAMAKURA_EXT_SharedExtraParams
 	uniform fixed _HatchRangeStretch;
 	uniform fixed _HatchRotSin;
 	uniform fixed _HatchRotCos;
+	uniform fixed _HatchBlendMode;
 
 
 	inline fixed3 HatchDiffuse(float4_t pos, float2_t uv, float_t nDotV, float intensity, fixed3 diffuse)
@@ -230,7 +230,7 @@ KAMAKURA_EXT_SharedExtraParams
 		hatchColor = ((hatchWeight1.w * _Hatch3Color.a) * _Hatch3Color.rgb) + hatchColor;
 		fixed4 hatchMaskSample = tex2D(_HatchMask, uv);
 
-		return lerp(diffuse, hatchColor, intensity * -hatchMaskSample.r * (_HatchIntensity * hatching - _HatchIntensity));
+		return lerp(diffuse, (1 - _HatchBlendMode) * hatchColor + _HatchBlendMode * hatchColor * diffuse, intensity * -hatchMaskSample.r * (_HatchIntensity * hatching - _HatchIntensity));
 	}
 #endif
 
@@ -251,25 +251,21 @@ KAMAKURA_EXT_SharedExtraParams
 	uniform float3_t _CubeColorLocalSpaceMatrixRow2;
 	uniform float3_t _CubeColorLocalSpaceMatrixRow3;
 
-	fixed3 GetCubeColor(float3_t normal)
+	fixed3 GetCubeColor(float3_t worldNormal)
 	{
 		UNITY_BRANCH
 		if (_EnableCubeColor > 0.5)
 		{
-
-			normal = mul(normal, (float3x3)unity_WorldToObject);
-
 			UNITY_BRANCH
 			if (_CubeColorUseLocalSpace > 0.5)
 			{
 				float3x3 localSpaceMatrix = float3x3(_CubeColorLocalSpaceMatrixRow0, _CubeColorLocalSpaceMatrixRow1, _CubeColorLocalSpaceMatrixRow2);
-				normal = mul(normal, localSpaceMatrix);
+				worldNormal = normalize(mul(worldNormal, localSpaceMatrix));
 			}
-
-			float3_t normalSqr = normalize(normal * normal);
-			fixed3 color = normalSqr.x * ((normal.x >= 0) ? _CubeColor1 : _CubeColor3)
-				+ normalSqr.y * ((normal.y >= 0) ? _CubeColor0 : _CubeColor5)
-				+ normalSqr.z * ((normal.z >= 0) ? _CubeColor2 : _CubeColor4);
+			float3_t normalSqr = normalize(worldNormal * worldNormal);
+			fixed3 color = normalSqr.x * ((worldNormal.x >= 0) ? _CubeColor1 : _CubeColor3)
+				+ normalSqr.y * ((worldNormal.y >= 0) ? _CubeColor0 : _CubeColor5)
+				+ normalSqr.z * ((worldNormal.z >= 0) ? _CubeColor2 : _CubeColor4);
 			return saturate(color);
 		}
 		else
@@ -289,7 +285,7 @@ KAMAKURA_EXT_SharedExtraParams
 		fixed3 val;
 		val = (_AmbientUseCubeColor * cubeColor + (1 - _AmbientUseCubeColor) * _AmbientColor) * _AmbientIntensity;
 		val = val * _EnableCubeColor + (1 - _EnableCubeColor) * _AmbientColor * _AmbientIntensity;
-		val += shAmbient;
+		val += shAmbient * _AmbientUnitySHIntensity;
 		return val;
 	}
 
@@ -304,8 +300,9 @@ KAMAKURA_EXT_SharedExtraParams
 	uniform sampler2D _RimNoiseTex;
 	uniform float4_t _RimNoiseTex_ST;
 	uniform fixed _RimBlendingMode;
+	uniform fixed _RimUnitySHIntensity;
 
-	inline fixed3 ApplyRim(fixed3 outColor, float2_t uv, float_t nDotV, fixed3 sampledCubeColor)
+	inline fixed3 ApplyRim(fixed3 outColor, float2_t uv, float_t nDotV, fixed3 sampledCubeColor, fixed3 shAmbient)
 	{
 		fixed inverseRimSize = 1 - _RimSize;
 		float2_t rimUVs = TRANSFORM_TEX(uv, _RimNoiseTex);
@@ -315,6 +312,7 @@ KAMAKURA_EXT_SharedExtraParams
 		fixed3 rimColor = _RimColor;
 		rimColor = _RimUseCubeColor * sampledCubeColor + (1 - _RimUseCubeColor) * _RimColor;
 		rimColor = _EnableCubeColor * rimColor + (1 - _EnableCubeColor) * _RimColor;
+		rimColor += _RimUnitySHIntensity * shAmbient;
 
 		return _RimBlendingMode * lerp(outColor, rimColor, rimAmount) + (1 - _RimBlendingMode) * (rimAmount * rimColor + outColor);
 	}
@@ -335,17 +333,16 @@ KAMAKURA_EXT_SharedExtraParams
 
 #ifdef KAMAKURA_NORMALMAP_ON
 	uniform sampler2D _NormalTex;
+	uniform fixed _NormalIntensity;
 
-	inline float3_t ApplyNormalMap(float3_t normalDir, float3_t tangentDir, float2_t uv)
+	inline float3_t ApplyNormalMap(float3_t normalDir, float4_t tangentDir, float2_t uv)
 	{
-		float3_t binormalDir = normalize(cross(normalDir, tangentDir));
-		half3x3 normalBase = half3x3(tangentDir, binormalDir, normalDir);
-
-		float4_t normalSample = tex2D(_NormalTex, uv);
-		float3_t localCoords = float3_t(2 * normalSample.a - 1.0, 2 * normalSample.g - 1.0, 0.0);
-		localCoords.z = sqrt(1 - dot(localCoords.x, localCoords.y));
-
-		return normalize(mul(localCoords, normalBase));
+		float3_t binormalDir = normalize(cross (normalDir, tangentDir.xyz) * tangentDir.w);
+		half3x3 normalBase = half3x3(tangentDir.xyz, binormalDir, normalDir);
+		float4_t normal = tex2D(_NormalTex, uv);
+		float3_t normalSample = UnpackNormal(normal);
+		normalSample.xy *= _NormalIntensity;
+		return normalize(mul(normalSample, normalBase));
 	}
 #endif
 
